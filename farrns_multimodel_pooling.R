@@ -87,3 +87,35 @@ ci95_pool <- apply(p12_pool_boot, 1, quantile, probs = c(0.05, 0.5, 0.95))
 par(mfrow = c(1,1))
 plot(boot_GmZ_df[[1]]$year, boot_GmZ_df[[1]]$GmZ, col = "grey",  cex = 0.1)
 matlines(1850:2100, t(ci95_pool), lty = c(2, 1, 2), lwd = c(1, 2, 1), col = "black")
+abline(h = 0.5, col = "red")
+
+lp12_tokeep <- lp12[lmodels %in% lmodels_tokeep]
+multimodel_average <- function(lp12, lmodels){
+  p12_df <- mapply(function(p12, model){
+    data.frame( 
+      model = model,
+      year = p12$t_unique,
+      p12 = p12$p12_hat,
+      sig = p12$sigma_p12_hat
+    )
+  }, p12 = lp12, model = lmodels, SIMPLIFY = FALSE
+  ) %>% do.call(rbind, .)
+  print(head(p12_df))
+  p12_multimodel <- aggregate(p12 ~ year, mean, data = p12_df)
+  # print(p12_multimodel)
+  sig_multimodel <- aggregate(
+    sig ~ year,
+    function(x) sqrt(sum(x^2)/length(x)^2),
+    data = p12_df
+  ) 
+  print(head(sig_multimodel))
+  merge(p12_multimodel, sig_multimodel)
+}
+p12_multimodel_ggplot <- multimodel_average(lp12_tokeep, lmodels_tokeep)  
+p <- ggplot(p12_multimodel_ggplot) +
+  geom_hline(yintercept = 1/2) +
+  geom_line(aes(y = p12, x = year), lwd = 1.2) +
+  geom_ribbon(aes(ymin = p12 - qnorm(0.95) * sig, ymax = p12 + qnorm(0.95) * sig, x = year), alpha = 0.3) +
+  # xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historical[1850-1900]")
+  xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historicalNat")
+plot(p)

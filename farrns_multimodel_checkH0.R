@@ -67,3 +67,50 @@ lUhat <- lapply(lmodels, function(model, tas_cmip5, tas_hadcrut, kernel, bandwid
   return(Uhat)
 }, tas_cmip5 = tas_cmip5, tas_hadcrut = tas_hadcrut, kernel = krnl, bandwidth = bandwidth)
 dev.off()
+
+hist_checkH0 <- function(X, lUhat, lmodels){
+  GmU_df <- mapply(
+    function(Uhat, model){
+      GmU <- ecdf(X)(Uhat)
+      data.frame(model = model, GmU = GmU)
+    },
+    Uhat = lUhat, model = lmodels,
+    SIMPLIFY = FALSE
+  ) %>% do.call(rbind, .)
+  print(head(GmU_df))
+  ggplot(data = GmU_df, aes(x = GmU, fill = model)) + 
+    geom_histogram(aes(y = ..density..), breaks = seq(0, 1, by = 0.2)) + 
+    geom_hline(yintercept = 1) +
+    facet_wrap( ~ model, ncol = 5)
+}
+hist_checkH0( 
+  X = tas_hadcrut_counterfactual$tas,
+  lUhat = lUhat,
+  lmodels = lmodels
+)
+
+qqplot_checkH0 <- function(X, lUhat, lmodels){
+  qq_df <- mapply(
+    function(Uhat, model){
+      qqdata <- qqplot(X, Uhat, plot.it = FALSE) %>% as.data.frame()
+      names(qqdata) <- c("X", "Uhat")
+      cbind(model = model, qqdata)
+    },
+    Uhat = lUhat, model = lmodels,
+    SIMPLIFY = FALSE
+  ) %>% do.call(rbind, .)
+  print(head(qq_df))
+  ggplot(data = qq_df) + 
+    geom_abline(intercept = 0, slope = 1) +
+    geom_point(aes(x = X, y = Uhat, col = model)) +
+    facet_wrap( ~ model, ncol = 5) +
+    title("qqplot(X, Uhat)")
+}
+qqplot_checkH0(
+  X = tas_hadcrut_counterfactual$tas,
+  lUhat = lUhat,
+  lmodels = lmodels
+)
+
+
+return(qqdata)
