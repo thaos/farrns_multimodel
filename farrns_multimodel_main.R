@@ -16,13 +16,24 @@ tas_cnrm_factual <- tas_cmip5[tas_cmip5$experiment != "historicalNat", ]
 tas_cnrm_counterfactual <- tas_cmip5[tas_cmip5$experiment == "historicalNat", ]
 # tas_cmip5 <- subset(tas_cmip5, run == "r1i1p1")
 
+write.table(
+  aggregate(
+    run ~ institute + model, 
+    FUN = function(x) paste(sort(unique(x)), collapse = ", "),
+    data = tas_cmip5
+  ),
+  file = "list_models_runs.txt",
+  row.names = FALSE
+)
+
+
 nc = nc_open(file = "tas_hadcrut.nc")
 tas = ncvar_get(nc, "temperature_anomaly") %>% as.numeric()
 year = ncvar_get(nc, "time") %/% 10000 %>% as.numeric()
 nc_close(nc)
 tas_hadcrut <- data.frame("institute" = "HadCRUT", "model" = "HadCRUT", "experiment" = "historical", "run" = "obs", "year" = year,  "tas" = tas)
 # 
-tas_cmip5 <- rbind(tas_hadcrut, tas_cmip5)
+tas_cmip5 <- rbind(tas_cmip5, tas_hadcrut)
 lmodels <- unique(tas_cmip5$model) %>% as.character()
 
 krnl <- kernel_epanechnikov
@@ -34,11 +45,6 @@ tas_hadcrut_counterfactual <- subset(tas_hadcrut, year <= 1900)
 # first fit to get bandwidth h
 theta <- estim_theta.nswexp(x = tas_hadcrut_counterfactual$tas, t = tas_hadcrut$year, z = tas_hadcrut$tas, kernel = krnl, h = NULL)
 # theta <- estim_theta.nswexp(x = tas_cnrm_counterfactual$tas, t = tas_cnrm_factual$year, z = tas_cnrm_factual$tas, kernel = krnl, h = NULL)
-print(theta$utest_pvalue)
-par(mfrow = c(1, 3), cex.main = 0.6, cex.lab = 0.6)
-hist(theta) 
-ecdf(theta)
-qqplot(theta)
 
 bandwidth <- theta$h
 # bandwidth <- 90
@@ -59,7 +65,6 @@ with(p12_ci90, points(year, mean, col = "green"))
 with(p12_ci90, lines(year, q05, col = "green"))
 with(p12_ci90, lines(year, q95, col = "green"))
 
-# Comparison of Asymptotic and Bootstrap CI
 lp12 <- lapply(lmodels, function(model, tas_cmip5, kernel, bandwidth){
   print("---------------------------")
   print(model)
@@ -92,7 +97,10 @@ p <- ggplot(lp12boot_ggplot) +
   geom_line(aes(y = p12, x = year, colour = model), lwd = 1.2) +
   geom_ribbon(aes(ymin = ci_q05, ymax = ci_q95, x = year, fill = model), alpha = 0.3) +
   facet_wrap( ~ model, ncol = 5) +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 90, hjust = 1)) +
   # xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historical[1850-1900]")
-  xlim(1850, 2100) +  ylim(min(lp12boot_ggplot$ci_q95), 1) + title("p12(t), counterfactual = historicalNat")
+  xlim(1850, 2100) +  ylim(min(lp12boot_ggplot$ci_q95), 1) + 
+  ggtitle("q1(t), factual = historical + rcp85, counterfactual = historicalNat") + ylab("q1")
 plot(p)
+ggsave("p12_ggplot.pdf", dpi = "retina", width = 20, height = 15, units = "cm")
 
