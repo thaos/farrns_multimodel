@@ -44,41 +44,44 @@ check_HO_rankhist <- function(X, Uhat){
   abline(h = length(GmU)/5, col = "red")
 }
 
-hist_checkH0 <- function(X, lUhat, lmodels){
+hist_checkH0 <- function(X, lUhat, lmodels, linstitutes){
   GmU_df <- mapply(
-    function(Uhat, model){
+    function(Uhat, model, institute){
       GmU <- ecdf(X)(Uhat)
-      data.frame(model = model, GmU = GmU)
+      data.frame(institute = institute, model = model, GmU = GmU)
     },
-    Uhat = lUhat, model = lmodels,
+    Uhat = lUhat, model = lmodels, institute = linstitutes,
     SIMPLIFY = FALSE
   ) %>% do.call(rbind, .)
   print(head(GmU_df))
-  ggplot(data = GmU_df, aes(x = GmU, fill = model)) + 
+  ggplot(data = GmU_df, aes(x = GmU, fill = institute, col = grepl("(CM6)", model))) + 
     geom_histogram(aes(y = ..density..), breaks = seq(0, 1, by = 0.2)) + 
     geom_hline(yintercept = 1) +
-    facet_wrap( ~ model, ncol = 5) +
+    facet_wrap( ~ institute + model, ncol = 5) +
     theme(legend.position = "none") +
+    scale_color_manual(values = c("white", "black"), labels = c("CMIP5", "CMIP6"), name= "CMIP")+
     ggtitle("Checking H0: ranks of Uhat with respect to X")
 }
 
-qqplot_checkH0 <- function(X, lUhat, lmodels){
+qqplot_checkH0 <- function(X, lUhat, lmodels, linstitutes){
   qq_df <- mapply(
-    function(Uhat, model){
+    function(Uhat, model, institute){
       qqdata <- qqplot(X, Uhat, plot.it = FALSE) %>% as.data.frame()
       names(qqdata) <- c("X", "Uhat")
-      cbind(model = model, qqdata)
+      cbind(institute = institute, model = model, qqdata)
     },
-    Uhat = lUhat, model = lmodels,
+    Uhat = lUhat, model = lmodels, institute = linstitutes,
     SIMPLIFY = FALSE
   ) %>% do.call(rbind, .)
   print(head(qq_df))
+  xylim = range(qq_df$X, qq_df$Uhat)
   ggplot(data = qq_df) + 
     geom_abline(intercept = 0, slope = 1) +
-    geom_point(aes(x = X, y = Uhat, col = model)) +
-    facet_wrap( ~ model, ncol = 5) +
+    geom_point(aes(x = X, y = Uhat, col = institute)) +
+    facet_wrap( ~ institute + model, ncol = 5) +
     theme(legend.position = "none") +
-    ggtitle("Checking H0: qq-plot(X, Uhat)")
+    ggtitle("Checking H0: qq-plot(X, Uhat)") +
+    coord_fixed(xlim = xylim, ylim = xylim) 
 }
 
 CvM_checkH0 <- function(X, lUhat, lmodels){
