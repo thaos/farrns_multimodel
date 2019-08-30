@@ -58,9 +58,9 @@ p12_ci90[order(p12_ci90$year), ]
 
 # Comparison of Asymptotic and Bootstrap CI
 p12 <- estim_p12_ns(x = tas_hadcrut_counterfactual$tas, t = tas_hadcrut$year, z = tas_hadcrut$tas, kernel = krnl, h = bandwidth)
-with(p12, plot(t_unique, p12_hat, lty = 2, ylim = range(p12_ci90[, -1], p12_hat + 1.64 * sigma_p12_hat, p12_hat - 1.64 * sigma_p12_hat)))
-with(p12, lines(t_unique, p12_hat + 1.64 * sigma_p12_hat))
-with(p12, lines(t_unique, p12_hat - 1.64 * sigma_p12_hat))
+with(p12, plot(tpred, p12_hat, lty = 2, ylim = range(p12_ci90[, -1], p12_hat + 1.64 * sigma_p12_hat, p12_hat - 1.64 * sigma_p12_hat)))
+with(p12, lines(tpred, p12_hat + 1.64 * sigma_p12_hat))
+with(p12, lines(tpred, p12_hat - 1.64 * sigma_p12_hat))
 with(p12_ci90, points(year, mean, col = "green"))
 with(p12_ci90, lines(year, q05, col = "green"))
 with(p12_ci90, lines(year, q95, col = "green"))
@@ -85,7 +85,7 @@ lp12boot_ggplot <- mapply(
   function(p12, model){
     data.frame(
       model = model,
-      year = p12$t_unique,
+      year = p12$tpred,
       p12 = p12$p12_hat,
       ci_q05 = p12$p12_hat - qnorm(0.05) * p12$sigma_p12_hat, 
       ci_q95 = p12$p12_hat + qnorm(0.05) * p12$sigma_p12_hat 

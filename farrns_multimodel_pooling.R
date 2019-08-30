@@ -20,26 +20,12 @@ lmodels_tokeep <- c(
 
 lp12_tokeep <- lp12[lmodels %in% lmodels_tokeep]
 lweight_tokeep <- CvM_df$weight[lmodels %in% lmodels_tokeep]
-multimodel_average <- function(lp12, lmodels, lweight = 1/length(lmodels)){
-  p12_df <- mapply(function(p12, model, weight){
-    data.frame( 
-      model = model,
-      weight = weight, 
-      year = p12$t_unique,
-      p12 = p12$p12_hat,
-      sig = p12$sigma_p12_hat
-    )
-  }, p12 = lp12, model = lmodels, weight = lweight, SIMPLIFY = FALSE
-  ) %>% do.call(rbind, .)
-  print(head(p12_df))
-  p12_byyear <- split(p12_df, f = p12_df$year)
-  lapply(p12_byyear, function(df){
-    weight <- df$weight / sum(df$weight)
-    p12 <- sum(df$p12 * weight)
-    sig <- sqrt(sum(df$sig^2 * weight^2))
-    data.frame(year = df$year, p12  = p12, sig = sig)
-  }) %>% do.call(rbind, .)
-}
+
+CvM_df_filtered <- keep_onemodel_perinstitute(CvM_df, unique(tas_cmip5[, c("institute", "model")]))
+lmodels_tokeep <- CvM_df_filtered$model
+lp12_tokeep <- lp12[lmodels %in% lmodels_tokeep]
+lweight_tokeep <- CvM_df_filtered$weight
+
 p12_multimodel_ggplot <- multimodel_average(lp12_tokeep, lmodels_tokeep)  
 p12_multimodel_ggplot <- multimodel_average(lp12_tokeep, lmodels_tokeep, lweight = lweight_tokeep)  
 p <- ggplot(p12_multimodel_ggplot) +
