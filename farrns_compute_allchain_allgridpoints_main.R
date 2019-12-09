@@ -3,7 +3,9 @@ library(magrittr)
 library(ggplot2)
 library(maps)
 library(reshape2)
-devtools::load_all("~/2_Code/Naveau/farFAR/farr")
+library(fields)
+library(viridis)
+# devtools::load_all("~/2_Code/Naveau/farFAR/farr")
 source("~/2_Code/Naveau/farFAR/farr/inprogress/tests_nsfar_algo.R")
 source("check_H0_algo.R")
 source("farrns_compute_allchain_algo.R")
@@ -83,7 +85,14 @@ for(iconfig in 1:1){
   if(cmip5_rds == "tas_cmip5_yearmin.rds"){
     tas_cmip5 <- aggregate(data = tas_cmip5, . ~  year + run + experiment + model + institute, FUN = min)
   }
-  
+  plot(subset(tas_cmip5, model == "HadCRUT", c("year", paste(iparis))),
+       xlab = "year",
+       ylab = "tas",
+       type = "l",
+       main = "HadCRUT, tas, Paris"
+  )
+  points(subset(tas_cmip5, model == "HadCRUT" & year == 1859, c("year", paste(iparis))), col = "red")
+  text(x = 1859, y = 2.7, "1859", col = "red")
   kernel <- kernel_epanechnikov
   bandwidth <- 32
   
@@ -241,3 +250,26 @@ for(iconfig in 1:1){
   # mapply(function(indice, model){subset(tas_cmip5, model == model & year <= 1900)[indice, "year"]}, indice = sapply(lp12_paris$lUhat[lmodels != "HadCRUT"], which.max), model = lmodels[lmodels != "HadCRUT"])
   gc(TRUE)
 }
+
+CvM_allgridpoints <- mapply(
+  function(x, igridpoint) {
+    cbind(x$CvM, gridpoint = as.numeric(igridpoint))
+  }, x = lp12_pergridpoint, igridpoint = inotna_gridpoint,
+  SIMPLIFY = FALSE
+) %>% do.call(rbind, .)
+CvM_allgridpoints$gridpoint <- apply(lonlat_df[CvM_allgridpoints$gridpoint,], 1, function(x) paste0("[", x[1], ";", x[2], "]"))
+CvM_allgridpoints <- within(
+  CvM_allgridpoints, 
+  gridpoint <- factor(gridpoint,  levels = unique(gridpoint)),
+  model <- factor(model,  levels = lmodels[order(linstitutes)])
+)
+pdf(paste0(cmip5_prefix,"_CvM_allgripoints.pdf"), width = 20/2.54, height = 25/2.54)
+p <- ggplot(subset(CvM_allgridpoints, model != "HadCRUT")) +
+  geom_raster(aes(x = model, y = gridpoint, fill = CvM)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_fill_gradientn(colours = rev(magma(5)), limits=c(0, 6)) + 
+  # xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historical[1850-1900]")
+  ggtitle(paste0("Checking H0: CvM distances for each location and each model"))
+plot(p)
+dev.off()
+CvM_matrix <- acast(data = CVM_allgridpoints, formula = model ~ gridpoint, value.var = "CvM")
