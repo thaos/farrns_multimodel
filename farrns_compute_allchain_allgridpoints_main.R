@@ -236,7 +236,7 @@ for(iconfig in 1:1){
   plot(p)
   dev.off() 
   
-  pdf(paste0(cmip5_prefix,"_qqplot_checkH0.pdf"), width = 20/2.54, height = 25/2.54)
+  pdf(paste0(cmip5_prefix,"_qqplot_checkH0.pdf"), width = 20/2.54, height = 24/2.54)
   p <- qqplot_checkH0(
     X = tas_hadcrut_counterfactual_paris,
     lUhat = lp12_paris$lUhat[lmodels != "HadCRUT"],
