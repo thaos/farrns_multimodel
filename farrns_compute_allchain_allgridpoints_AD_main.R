@@ -10,12 +10,16 @@ source("check_H0_simpler_algo.R")
 # ---------------------------------
 
 config <- new.env()
-source("config_pryearmax.R",  local = config) 
+source("config_tasaugustavg.R",  local = config) 
 cmip5_rds <- config$cmip5_rds
 cmip6_rds <- config$cmip6_rds
 cmip5_prefix <- config$cmip5_prefix
 p12outputs_rds <- config$p12outputs_rds 
 unit_scaling <- config$unit_scaling
+obs_rds <- config$obs_rds
+obs_lonlat <- config$obs_lonlat
+obs_varname <- config$obs_varname
+p12obs_rds <- config$p12obs_rds
 
 # ---------------------------------
 # Data loading and preparation ----
@@ -99,7 +103,7 @@ nc_close(nc)
 
 lonlat_df <- expand.grid(lon = lon, lat = lat)
 iworld <- seq.int(nrow(lonlat_df))
-iparis <- with(lonlat_df, which(lon == 2.5 & lat == 47.5))
+iparis <- with(lonlat_df, which(lon == obs_lonlat[1] & lat == obs_lonlat[2]))
 
 # ---------------------------------
 # Multimodel analysis ----
@@ -130,6 +134,10 @@ allbandwidths <- compute_allbandwidth(
 print(str(allbandwidths))
 bandwidth <- median(allbandwidths)
 print(bandwidth)
+
+obs_df <- readRDS(obs_rds)
+p12_obs <- estim_p12_ns(x = obs_df[, obs_varname][obs_df[, "year"] >= 1850 & obs_df[, "year"] <= 1900], t = obs_df[, "year"], z = obs_df[, obs_varname], tpred = obs_df[, "year"], kernel = kernel, h = bandwidth)
+saveRDS(p12_obs, file = p12obs_rds)
 
 lp12_pergridpoint <- lapply(iworld, function(igridpoint) {
   cat(".")

@@ -16,19 +16,17 @@ source("check_H0_simpler_algo.R")
 # ---------------------------------
 
 config <- new.env()
-source("config_pryearmax.R",  local = config) 
+source("config_tasaugustavg.R",  local = config) 
 cmip5_prefix <- config$cmip5_prefix
 p12outputs_rds <- config$p12outputs_rds 
 varname_inplot <- config$varname_inplot
 varunit <- config$varunit
+obs_lonlat <- config$obs_lonlat
+p12obs_rds <- config$p12obs_rds
+city <- config$city
+
 if(!dir.exists(cmip5_prefix)) dir.create(cmip5_prefix)
 
-lmodels <- readRDS(
-  paste0(cmip5_prefix, "_lmodels.rds")
-)
-linstitutes <- readRDS(
-  paste0(cmip5_prefix, "_linstitutes.rds")
-)
 
 hadcrut_nc <- "tas_hadcrut_augustavg.nc"
 nc <- nc_open(file = hadcrut_nc)
@@ -39,14 +37,14 @@ nc_close(nc)
 
 lonlat_df <- expand.grid(lon = lon, lat = lat)
 iworld <- seq.int(nrow(lonlat_df))
-iparis <- with(lonlat_df, which(lon == 2.5 & lat == 47.5))
+iparis <- with(lonlat_df, which(lon == obs_lonlat[1] & lat == obs_lonlat[2]))
 ineighbours <- with(
   lonlat_df,
   which(
-    lon == 2.5 & lat == (47.5 + 5) |
-    lon == 2.5 & lat == (47.5 - 5) |
-    lon == (2.5 + 5) & lat == 47.5 |
-    lon == (2.5 - 5) & lat == 47.5
+    lon == obs_lonlat[1] & lat == (obs_lonlat[2] + 5) |
+    lon == obs_lonlat[1] & lat == (obs_lonlat[2] - 5) |
+    lon == (obs_lonlat[1] + 5) & lat == obs_lonlat[2] |
+    lon == (obs_lonlat[1] - 5) & lat == obs_lonlat[2]
   ) 
 )
 
@@ -54,13 +52,14 @@ ineighbours <- with(
 # Loadings Results ---
 # ---------------------------------
 
-linstitutes  <- readRDS(
-  paste0(cmip5_prefix, "_linstitutes.rds")
+lmodels <- readRDS(
+  paste0(cmip5_prefix, "_lmodels.rds")
 )
-linstitutes  <- readRDS(
+linstitutes <- readRDS(
   paste0(cmip5_prefix, "_linstitutes.rds")
 )
 lp12_pergridpoint <- readRDS(p12outputs_rds)
+p12_obs <- readRDS(p12obs_rds)
 lp12_reformated <- reformat_lp12(
   lp12_pergridpoint = lp12_pergridpoint,
   lmodels = lmodels, linstitutes = linstitutes
@@ -78,23 +77,42 @@ lp12_reformated <- reformat_lp12(
 p12_paris <- subset(lp12_reformated, igridpoint == iparis)
 p12_paris$ci_q05 <- p12_paris$p12 - qnorm(0.95) * p12_paris$sig
 p12_paris$ci_q95 <- p12_paris$p12 + qnorm(0.95) * p12_paris$sig
+weight_paris_df <- data.frame(
+  institute = linstitutes,
+  model = lmodels,
+  weight = lp12_pergridpoint[[iparis]]$lweights_kl
+)
 
 pdf(
-  file.path(cmip5_prefix, paste0(cmip5_prefix, "_paris.pdf")),
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_", city, ".pdf")),
   width = 20 / 2.54, height = 20 / 2.54
 )
-p <- ggplot(subset(p12_paris, model != "multimodel")) +
+p <- ggplot(subset(p12_paris, !(model %in% c("multimodel_kl" , "multimodel_oracle", "multimodel_best")))) +
   geom_hline(yintercept = 1 / 2, lwd = 0.1) +
-  geom_line(aes(y = p12, x = year, colour = institute), lwd = 0.5) +
-  geom_ribbon(
-    aes(ymin = ci_q05, ymax = ci_q95, x = year, fill = institute),
-    alpha = 0.3
+  geom_line(
+    aes(y = p12, x = year),
+    lwd = 0.5
   ) +
-  facet_wrap(~ institute + model, ncol = 5) +
+  geom_ribbon(
+    aes(ymin = ci_q05, ymax = ci_q95, x = year),
+    fill = "grey",
+    alpha = 0.8
+  ) +
+  geom_point(
+    data = weight_paris_df,
+    aes(x = 1860,
+        y = 0.9,
+        fill = weight, size = weight
+    ),
+    shape = 23
+  ) +
+  scale_fill_gradientn(colours = rev(magma(5)), limits = c(0, 1)) +
+  facet_wrap(~ institute + model, ncol = sqrt(length(lmodels))) +
   theme(
-    legend.position = "none",
+    legend.position = "right",
     axis.text.x = element_text(angle = 90, hjust = 1)
   ) +
+  guides(size = "none") +
   # xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historical[1850-1900]")
   xlim(1850, 2100) +
   ylim(min(p12_paris$ci_q05), 1) +
@@ -108,11 +126,56 @@ p <- ggplot(subset(p12_paris, model != "multimodel")) +
 plot(p)
 dev.off()
 
+p12_obs_df <- data.frame(
+  igridpoint = iparis, 
+  institute = "GHCND",
+  model = paste(city, "obs"),
+  year = p12_obs$tpred,
+  p12 = p12_obs$p12_hat,
+  sig = p12_obs$sigma_p12_hat,
+  ci_q05 = p12_obs$p12_hat - qnorm(0.95) * p12_obs$sigma_p12_hat,
+  ci_q95 = p12_obs$p12_hat + qnorm(0.95) * p12_obs$sigma_p12_hat
+)
+
 pdf(
-  file.path(cmip5_prefix, paste0(cmip5_prefix, "_multimodel_paris.pdf")),
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_multimodel_", city, ".pdf")),
   width = 20 / 2.54, height = 20 / 2.54
 )
-p <- ggplot(subset(p12_paris, model == "multimodel")) +
+mm_df <- subset(
+    p12_paris,
+    model == "multimodel_kl" | model == "multimodel_oracle" | model == "multimodel_best")
+mm_df$combination <- factor(mm_df$model, level = c("multimodel_best", "multimodel_oracle",  "multimodel_kl"))
+levels(mm_df$combination)[levels(mm_df$combination)=="multimodel_best"] <- "best_model"
+p <- ggplot(mm_df)+
+  geom_hline(yintercept = 1 / 2, lwd = 0.1) +
+  geom_ribbon(
+    aes(ymin = ci_q05, ymax = ci_q95, x = year, fill = combination),
+    alpha = 0.3
+  ) +
+  geom_line(aes(y = p12, x = year,  colour = combination), lwd = 2) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  ) +
+  xlim(1850, 2100) +
+  ylim(min(p12_paris$ci_q05), 1) +
+  ggtitle(
+    paste0(
+      varname_inplot,
+      ", q(t), factual = historical + rcp85, counterfactual = historicalNat"
+    )
+  ) +
+  ylab("q(t)")
+plot(p)
+dev.off()
+
+
+
+pdf(
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_obs_", city, ".pdf")),
+  width = 20 / 2.54, height = 20 / 2.54
+)
+p <- ggplot(p12_obs_df) +
   geom_hline(yintercept = 1 / 2, lwd = 0.1) +
   geom_line(aes(y = p12, x = year), colour = "grey", lwd = 0.5) +
   geom_ribbon(
@@ -135,14 +198,13 @@ p <- ggplot(subset(p12_paris, model == "multimodel")) +
 plot(p)
 dev.off()
 
-
 # ---------------------------------
 ## q(t) worldmaps
 
 p12_4years <- subset(
   lp12_reformated,
   year %in% c(1850, 1900, 1940, 1970, 2000, 2020, 2030, 2050, 2100) &
-    model == "multimodel"
+    model == "multimodel_kl"
 )
 p12_4years$lon <- lonlat_df$lon[as.numeric(paste(p12_4years$igridpoint))]
 
@@ -175,12 +237,63 @@ p <- ggplot(p12_4years) +
 plot(p)
 dev.off()
 
+p12_reformated_klmm <- subset(lp12_reformated, model == "multimodel_kl" & year <= 2100)
+emergence_df <- by(p12_reformated_klmm, p12_reformated_klmm$igridpoint, function(df){
+  ci_q05 <- df$p12 - qnorm(0.95) * df$sig
+  ci_q95 <- df$p12 + qnorm(0.95) * df$sig
+  year <- df$year
+  emergence <- sign <- NA
+  icond <- ci_q05 > 0.5
+  i <- length(icond)
+  while(i > 0 & icond[i]){
+    emergence <- year[i]
+    i <- i - 1
+  }
+  if(!is.na(emergence)){
+    sign <- "+"
+    return(cbind(df[1,], emergence = emergence, sign = sign))
+  }
+  icond <- ci_q95 < 0.5
+  i <- length(icond)
+  while(i > 0 & icond[i]){
+    emergence <- year[i]
+    i <- i - 1
+  }
+  if(!is.na(emergence)){
+    sign <- "-"
+    return(cbind(df[1,], emergence = emergence, sign = sign))
+  }
+  return(cbind(df[1,], emergence = emergence, sign = sign))
+  }
+) %>% do.call(rbind, .)
+
+emergence_df$lon <- lonlat_df$lon[emergence_df$igridpoint]
+emergence_df$lat <- lonlat_df$lat[emergence_df$igridpoint]
+
+
+pdf(
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_emergence_multimodel.pdf")),
+  width = 20 / 2.54, height = 20 / 2.54
+)
+zlim <- c(min(emergence_df$emergence, na.rm = TRUE), 2100)
+p <- ggplot(subset(emergence_df, sign == "+"))+
+  geom_raster(aes(x = lon, y = lat, fill = emergence)) +
+  geom_map(
+    data = WorldData, map = WorldData,
+    aes(map_id = region), fill = NA, col = "black"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.key.height = unit(1, "inch")) +
+  scale_fill_gradientn(name = "year", colours = colpal,  breaks = seq(zlim[1], zlim[2], by = 10), limits = zlim) +
+  scale_shape_manual(values=c(24, 25))+
+  ggtitle(paste0(varname_inplot, ", multimodel time of emergence, factual = historical + rcp85, counterfactual = historicalNat"))
+plot(p)
+dev.off()
 
 # ---------------------------------
 ## Checking Assumption
 lp12_paris <- lp12_pergridpoint[[iparis]]
 pdf(
-  file.path(cmip5_prefix, paste0(cmip5_prefix, "_qqplot_checkH0.pdf")),
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_qqplot_checkH0_", city, ".pdf")),
   width = 20 / 2.54, height = 25 / 2.54
 )
 p <- qqplot_checkH0(
@@ -191,7 +304,7 @@ p <- qqplot_checkH0(
   xlab(paste0("Xm (", varunit, ")")) +
   ylab(paste0("Zm (", varunit, ")")) +
   theme(
-    legend.position = "none",
+    legend.position = "bottom",
     axis.text.x = element_text(angle = 90, hjust = 1)
   )
 plot(p)
@@ -203,18 +316,12 @@ dev.off()
 
 ### Weights in Paris
 
-lp12_paris <- lp12_pergridpoint[[which(iworld == iparis)]]
-# )
-weights_paris <- data.frame(
-  model = factor(lmodels, levels = lmodels[order(linstitutes)]),
-  weight = lp12_paris$lweights
-)
 pdf(
-  file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights.pdf")), 
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights.pdf_", city, ".pdf")), 
   width = 20 / 2.54, height = 20 / 2.54
 )
 p <- ggplot(
-  data = weights_paris,
+  data = weight_paris_df,
   aes(x = model, y = weight, fill = grepl("(CM6)", model))
 ) +
   geom_bar(stat = "identity") +
@@ -230,7 +337,7 @@ dev.off()
 ### Weights in Paris neighbours
 weights_neighbours <- mapply(
   function(x, igridpoint) {
-    data.frame(model = lmodels, weight = x$lweights, gridpoint = as.numeric(igridpoint))
+    data.frame(model = lmodels, weight = x$lweights_kl, gridpoint = as.numeric(igridpoint))
   },
   x = lp12_pergridpoint[ineighbours], igridpoint = ineighbours,
   SIMPLIFY = FALSE
@@ -247,7 +354,7 @@ weights_neighbours <- within(
 )
 ylim <- c(0, with(weights_neighbours, max(weight[is.finite(weight)])))
 pdf(
-  file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights_neighbours.pdf")),
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights_neighbours_", city, ".pdf")),
   width = 20 / 2.54, height = 25 / 2.54
 )
 p <- ggplot(
@@ -262,14 +369,14 @@ p <- ggplot(
     name = "CMIP"
   ) +
   facet_wrap(~ gridpoint, ncol = 2) +
-  ggtitle(paste0("Expert aggregation: weights distances for gridpoints around Paris"))
+  ggtitle(paste0("Aggregation: KL weights distances for gridpoints around ", city))
 plot(p)
 dev.off()
 
 ### Weights all gridpoints
 weights_allgridpoints <- mapply(
   function(x, igridpoint) {
-    data.frame(model = lmodels, weight = x$lweights, gridpoint = as.numeric(igridpoint))
+    data.frame(model = lmodels, weight = x$lweights_kl, gridpoint = as.numeric(igridpoint))
   },
   x = lp12_pergridpoint, igridpoint = iworld,
   SIMPLIFY = FALSE
