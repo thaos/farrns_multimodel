@@ -16,7 +16,7 @@ source("check_H0_simpler_algo.R")
 # ---------------------------------
 
 config <- new.env()
-source("config_tasaugustavg.R",  local = config) 
+source("config_pryearmax.R",  local = config) 
 cmip5_prefix <- config$cmip5_prefix
 p12outputs_rds <- config$p12outputs_rds 
 varname_inplot <- config$varname_inplot
@@ -107,7 +107,7 @@ p <- ggplot(subset(p12_paris, !(model %in% c("multimodel_kl" , "multimodel_oracl
     shape = 23
   ) +
   scale_fill_gradientn(colours = rev(magma(5)), limits = c(0, 1)) +
-  facet_wrap(~ institute + model, ncol = sqrt(length(lmodels))) +
+  facet_wrap(~ institute + model, ncol = ceiling(sqrt(length(lmodels)))) +
   theme(
     legend.position = "right",
     axis.text.x = element_text(angle = 90, hjust = 1)
@@ -128,7 +128,7 @@ dev.off()
 
 p12_obs_df <- data.frame(
   igridpoint = iparis, 
-  institute = "GHCND",
+  institute = "obs",
   model = paste(city, "obs"),
   year = p12_obs$tpred,
   p12 = p12_obs$p12_hat,
@@ -143,8 +143,9 @@ pdf(
 )
 mm_df <- subset(
     p12_paris,
-    model == "multimodel_kl" | model == "multimodel_oracle" | model == "multimodel_best")
-mm_df$combination <- factor(mm_df$model, level = c("multimodel_best", "multimodel_oracle",  "multimodel_kl"))
+    model == "multimodel_kl" | model == "multimodel_best"
+)
+mm_df$combination <- factor(mm_df$model, level = c("multimodel_best", "multimodel_kl"))
 levels(mm_df$combination)[levels(mm_df$combination)=="multimodel_best"] <- "best_model"
 p <- ggplot(mm_df)+
   geom_hline(yintercept = 1 / 2, lwd = 0.1) +
@@ -162,7 +163,7 @@ p <- ggplot(mm_df)+
   ggtitle(
     paste0(
       varname_inplot,
-      ", q(t), factual = historical + rcp85, counterfactual = historicalNat"
+      ", q(t), factual = hist + rcp85, counterfactual = histNat"
     )
   ) +
   ylab("q(t)")
@@ -175,15 +176,22 @@ pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_obs_", city, ".pdf")),
   width = 20 / 2.54, height = 20 / 2.54
 )
-p <- ggplot(p12_obs_df) +
+p <- ggplot(
+  rbind(
+    p12_obs_df,
+    subset(
+      p12_paris,
+      model == "multimodel_kl" 
+    )
+  )) +
   geom_hline(yintercept = 1 / 2, lwd = 0.1) +
-  geom_line(aes(y = p12, x = year), colour = "grey", lwd = 0.5) +
+  geom_line(aes(y = p12, x = year, colour = model), lwd = 0.5) +
   geom_ribbon(
-    aes(ymin = ci_q05, ymax = ci_q95, x = year),
-    colour = "grey", alpha = 0.3
+    aes(ymin = ci_q05, ymax = ci_q95, x = year, fill = model),
+    alpha = 0.3
   ) +
   theme(
-    legend.position = "none",
+    legend.position = "bottom",
     axis.text.x = element_text(angle = 90, hjust = 1)
   ) +
   xlim(1850, 2100) +
@@ -191,7 +199,7 @@ p <- ggplot(p12_obs_df) +
   ggtitle(
     paste0(
       varname_inplot,
-      ", q(t), factual = historical + rcp85, counterfactual = historicalNat"
+      ", q(t), factual = hist + rcp85, counterfactual = histNat"
     )
   ) +
   ylab("q(t)")
@@ -233,12 +241,13 @@ p <- ggplot(p12_4years) +
   facet_wrap(~year, ncol = 3) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   scale_fill_gradientn(name = "q(t)", colours = colpal, limits = c(-0.01, 1.01), breaks = c(0, seq(0.1, 0.9, by = 0.1), 1)) +
-  ggtitle(paste0(varname_inplot, ", q(t) multimodel, factual = historical + rcp85, counterfactual = historicalNat"))
+  ggtitle(paste0(varname_inplot, ", q(t) multimodel"))
 plot(p)
 dev.off()
 
 p12_reformated_klmm <- subset(lp12_reformated, model == "multimodel_kl" & year <= 2100)
 emergence_df <- by(p12_reformated_klmm, p12_reformated_klmm$igridpoint, function(df){
+  print(df$igridpoint)
   ci_q05 <- df$p12 - qnorm(0.95) * df$sig
   ci_q95 <- df$p12 + qnorm(0.95) * df$sig
   year <- df$year
@@ -275,7 +284,7 @@ pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_emergence_multimodel.pdf")),
   width = 20 / 2.54, height = 20 / 2.54
 )
-zlim <- c(min(emergence_df$emergence, na.rm = TRUE), 2100)
+zlim <- c(1850, 2100)
 p <- ggplot(subset(emergence_df, sign == "+"))+
   geom_raster(aes(x = lon, y = lat, fill = emergence)) +
   geom_map(
@@ -285,7 +294,7 @@ p <- ggplot(subset(emergence_df, sign == "+"))+
   theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.key.height = unit(1, "inch")) +
   scale_fill_gradientn(name = "year", colours = colpal,  breaks = seq(zlim[1], zlim[2], by = 10), limits = zlim) +
   scale_shape_manual(values=c(24, 25))+
-  ggtitle(paste0(varname_inplot, ", multimodel time of emergence, factual = historical + rcp85, counterfactual = historicalNat"))
+  ggtitle(paste0(varname_inplot, ", multimodel time of emergence"))
 plot(p)
 dev.off()
 
@@ -369,7 +378,7 @@ p <- ggplot(
     name = "CMIP"
   ) +
   facet_wrap(~ gridpoint, ncol = 2) +
-  ggtitle(paste0("Aggregation: KL weights distances for gridpoints around ", city))
+  ggtitle(paste0("Aggregation: KL weights for gridpoints around ", city))
 plot(p)
 dev.off()
 
@@ -406,7 +415,7 @@ p <- ggplot(weights_allgridpoints) +
   ) +
   scale_fill_gradientn(colours = rev(magma(5)), limits = ylim) +
   # xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historical[1850-1900]")
-  ggtitle(paste0("Expert aggregation: weights distances for each location and each model"))
+  ggtitle(paste0("Expert aggregation: weights for each location and each model"))
 plot(p)
 dev.off()
 

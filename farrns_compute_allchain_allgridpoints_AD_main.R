@@ -10,7 +10,7 @@ source("check_H0_simpler_algo.R")
 # ---------------------------------
 
 config <- new.env()
-source("config_tasaugustavg.R",  local = config) 
+source("config_pryearmax.R",  local = config) 
 cmip5_rds <- config$cmip5_rds
 cmip6_rds <- config$cmip6_rds
 cmip5_prefix <- config$cmip5_prefix
