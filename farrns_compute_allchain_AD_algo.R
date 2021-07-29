@@ -1,4 +1,4 @@
-compute_allchain <- function(lmodels, linstitutes, tas_cmip5, kernel, bandwidth) {
+compute_allchain <- function(lmodels, linstitutes, tas_cmip5, kernel, bandwidth,year_pi = c(1850, 1900)) {
   lp12 <- lapply(lmodels, function(model, tas_cmip5, kernel, bandwidth) {
     tas_model <- tas_cmip5[tas_cmip5$model == model, ]
     tas_model_factual <- tas_model[tas_model$experiment == "historical" | tas_model$experiment == "rcp85", ]
@@ -9,8 +9,8 @@ compute_allchain <- function(lmodels, linstitutes, tas_cmip5, kernel, bandwidth)
 
   lXmZm <- lapply(lmodels, function(model, tas_cmip5) {
     tas_model <- tas_cmip5[tas_cmip5$model == model, ]
-    tas_model_factual <- tas_model[tas_model$experiment == "historical" & tas_model$year <= 1900, ]
-    tas_model_counterfactual <- tas_model[tas_model$experiment == "historicalNat" & tas_model$year <= 1900, ]
+    tas_model_factual <- tas_model[tas_model$experiment == "historical" & tas_model$year >= year_pi[1] & tas_model$year <= year_pi[2], ]
+    tas_model_counterfactual <- tas_model[tas_model$experiment == "historicalNat" & tas_model$year >= year_pi[1] & tas_model$year <= year_pi[2], ]
     return(
       list(
         Xm = tas_model_counterfactual$tas,
@@ -19,11 +19,28 @@ compute_allchain <- function(lmodels, linstitutes, tas_cmip5, kernel, bandwidth)
     )
   }, tas_cmip5 = tas_cmip5)
   
-  lweights_kl <- compute_kl_weights(lp12)
+  pvalue <- sapply(lXmZm, function(XmZm) twosamples::ad_test(XmZm$Xm, XmZm$Zm)[2])
+  imodels <- pvalue > 0.2
+  
+  dates_H0 <- seq.int(year_pi[1], year_pi[2])
+  experts <- vapply(
+    lp12,
+    function(p12) {
+      return(
+        p12$p12_hat[p12$tpred >= min(dates_H0) & p12$tpred <= max(dates_H0)]
+      )
+    },
+    FUN.VALUE = numeric(length(dates_H0))
+  )
+
+  kl <- apply(experts, 2, kldiv)
+  lweights_kl <- rep(0, length(lp12))
+  lweights_oracle <- rep(0, length(lp12))
+  lweights_kl[imodels] <- compute_kl_weights(experts[, imodels])
+  lweights_oracle[imodels] <- compute_oracle_weights(experts[, imodels])
   p12_multimodel_kl <- multimodel_average(lp12, lmodels, lweights = lweights_kl)
-  lweights_oracle <- compute_oracle_weights(lp12)
   p12_multimodel_oracle <- multimodel_average(lp12, lmodels, lweights = lweights_oracle)
-  lweights_best <- lweights_kl == max(lweights_kl)
+  lweights_best <- kl == min(kl)
   p12_multimodel_best <- multimodel_average(lp12, lmodels, lweights = lweights_best)
 
   list(

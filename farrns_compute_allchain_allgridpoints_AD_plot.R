@@ -16,7 +16,7 @@ source("check_H0_simpler_algo.R")
 # ---------------------------------
 
 config <- new.env()
-source("config_tasaugustavg.R",  local = config) 
+source("config_pryearmax.R",  local = config) 
 cmip5_prefix <- config$cmip5_prefix
 p12outputs_rds <- config$p12outputs_rds 
 varname_inplot <- config$varname_inplot
@@ -83,31 +83,56 @@ weight_paris_df <- data.frame(
   weight = lp12_pergridpoint[[iparis]]$lweights_kl
 )
 
+GmZ_paris <- mapply(
+    function(institute, model, lp12){
+    data.frame(institute = institute, model = model, year = lp12$tz, GmZ =lp12$GmZ, stringsAsFactors = FALSE)},
+    institute = linstitutes, model = lmodels, lp12 = lp12_pergridpoint[[iparis]]$lp12,
+    SIMPLIFY = FALSE
+)
+GmZ_paris <- do.call(rbind, GmZ_paris)
+
 pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_", city, ".pdf")),
   width = 20 / 2.54, height = 20 / 2.54
 )
-p <- ggplot(subset(p12_paris, !(model %in% c("multimodel_kl" , "multimodel_oracle", "multimodel_best")))) +
-  geom_hline(yintercept = 1 / 2, lwd = 0.1) +
-  geom_line(
-    aes(y = p12, x = year),
-    lwd = 0.5
+p <- ggplot(GmZ_paris) +
+  geom_point(
+    aes(x = year,
+        y = GmZ
+    ),
+    size = 0.1
   ) +
+  geom_hline(yintercept = 1 / 2, lwd = 0.1) +
   geom_ribbon(
+    data = subset(p12_paris, !(model %in% c("multimodel_kl" , "multimodel_oracle", "multimodel_best"))),
     aes(ymin = ci_q05, ymax = ci_q95, x = year),
-    fill = "grey",
+    fill = "orange",
     alpha = 0.8
   ) +
-  geom_point(
-    data = weight_paris_df,
-    aes(x = 1860,
-        y = 0.9,
-        fill = weight, size = weight
-    ),
-    shape = 23
+  geom_line(
+    data = subset(p12_paris, !(model %in% c("multimodel_kl" , "multimodel_oracle", "multimodel_best"))),
+    aes(y = p12, x = year),
+    colour = "red",
+    lwd = 1
   ) +
+  #geom_point(
+  #  data = weight_paris_df,
+  #  aes(x = 1860,
+  #      y = 0.9,
+  #      fill = weight, size = weight
+  #  ),
+  #  shape = 23
+  #) +
+  geom_label(
+      data = weight_paris_df,
+      aes(x = 1875,
+          y = 0.9,
+          label = sprintf("%1.2f", weight)
+      ),
+      size = 3
+  ) + 
   scale_fill_gradientn(colours = rev(magma(5)), limits = c(0, 1)) +
-  facet_wrap(~ institute + model, ncol = sqrt(length(lmodels))) +
+  facet_wrap(~ institute + model, ncol = ceiling(sqrt(length(lmodels)))) +
   theme(
     legend.position = "right",
     axis.text.x = element_text(angle = 90, hjust = 1)
@@ -128,7 +153,7 @@ dev.off()
 
 p12_obs_df <- data.frame(
   igridpoint = iparis, 
-  institute = "GHCND",
+  institute = "obs",
   model = paste(city, "obs"),
   year = p12_obs$tpred,
   p12 = p12_obs$p12_hat,
@@ -143,9 +168,11 @@ pdf(
 )
 mm_df <- subset(
     p12_paris,
-    model == "multimodel_kl" | model == "multimodel_oracle" | model == "multimodel_best")
-mm_df$combination <- factor(mm_df$model, level = c("multimodel_best", "multimodel_oracle",  "multimodel_kl"))
-levels(mm_df$combination)[levels(mm_df$combination)=="multimodel_best"] <- "best_model"
+    model == "multimodel_kl" | model == "multimodel_best"
+)
+mm_df$combination <- factor(mm_df$model, level = c("multimodel_best", "multimodel_kl"))
+levels(mm_df$combination)[levels(mm_df$combination)=="multimodel_best"] <- "GCM with largest Anderson-Darling p-value"
+levels(mm_df$combination)[levels(mm_df$combination)=="multimodel_kl"] <- "Weighted convex combination"
 p <- ggplot(mm_df)+
   geom_hline(yintercept = 1 / 2, lwd = 0.1) +
   geom_ribbon(
@@ -157,12 +184,13 @@ p <- ggplot(mm_df)+
     legend.position = "bottom",
     axis.text.x = element_text(angle = 90, hjust = 1)
   ) +
+  guides(fill=guide_legend(title=NULL), colour=guide_legend(title=NULL)) +
   xlim(1850, 2100) +
   ylim(min(p12_paris$ci_q05), 1) +
   ggtitle(
     paste0(
       varname_inplot,
-      ", q(t), factual = historical + rcp85, counterfactual = historicalNat"
+      ", q(t), factual = hist + rcp85, counterfactual = histNat"
     )
   ) +
   ylab("q(t)")
@@ -175,15 +203,22 @@ pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_obs_", city, ".pdf")),
   width = 20 / 2.54, height = 20 / 2.54
 )
-p <- ggplot(p12_obs_df) +
+p <- ggplot(
+  rbind(
+    p12_obs_df,
+    subset(
+      p12_paris,
+      model == "multimodel_kl" 
+    )
+  )) +
   geom_hline(yintercept = 1 / 2, lwd = 0.1) +
-  geom_line(aes(y = p12, x = year), colour = "grey", lwd = 0.5) +
+  geom_line(aes(y = p12, x = year, colour = model), lwd = 0.5) +
   geom_ribbon(
-    aes(ymin = ci_q05, ymax = ci_q95, x = year),
-    colour = "grey", alpha = 0.3
+    aes(ymin = ci_q05, ymax = ci_q95, x = year, fill = model),
+    alpha = 0.3
   ) +
   theme(
-    legend.position = "none",
+    legend.position = "bottom",
     axis.text.x = element_text(angle = 90, hjust = 1)
   ) +
   xlim(1850, 2100) +
@@ -191,7 +226,7 @@ p <- ggplot(p12_obs_df) +
   ggtitle(
     paste0(
       varname_inplot,
-      ", q(t), factual = historical + rcp85, counterfactual = historicalNat"
+      ", q(t), factual = hist + rcp85, counterfactual = histNat"
     )
   ) +
   ylab("q(t)")
@@ -222,7 +257,7 @@ colpal <- rev(
 )
 pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_maps_multimodel.pdf")),
-  width = 20 / 2.54, height = 20 / 2.54
+  width = 20 / 2.54, height = 15 / 2.54
 )
 p <- ggplot(p12_4years) +
   geom_contour_fill(aes(x = lon, y = lat, z = p12), breaks = c(-0.01, seq(0.1, 0.9, by = 0.1), 1.01)) +
@@ -231,9 +266,21 @@ p <- ggplot(p12_4years) +
     aes(map_id = region), fill = NA, col = "black"
   ) +
   facet_wrap(~year, ncol = 3) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(
+      # axis.text.x = element_text(angle = 90, hjust = 1),
+      legend.key.height = unit(0.7, "inch"),
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
   scale_fill_gradientn(name = "q(t)", colours = colpal, limits = c(-0.01, 1.01), breaks = c(0, seq(0.1, 0.9, by = 0.1), 1)) +
-  ggtitle(paste0(varname_inplot, ", q(t) multimodel, factual = historical + rcp85, counterfactual = historicalNat"))
+  coord_fixed() +
+  ggtitle(paste0(varname_inplot, ", q(t) multimodel"))
 plot(p)
 dev.off()
 
@@ -273,19 +320,31 @@ emergence_df$lat <- lonlat_df$lat[emergence_df$igridpoint]
 
 pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_emergence_multimodel.pdf")),
-  width = 20 / 2.54, height = 20 / 2.54
+  width = 20 / 2.54, height = 12 / 2.54
 )
-zlim <- c(min(emergence_df$emergence, na.rm = TRUE), 2100)
+zlim <- c(1900, 2100)
 p <- ggplot(subset(emergence_df, sign == "+"))+
   geom_raster(aes(x = lon, y = lat, fill = emergence)) +
   geom_map(
     data = WorldData, map = WorldData,
     aes(map_id = region), fill = NA, col = "black"
   ) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.key.height = unit(1, "inch")) +
-  scale_fill_gradientn(name = "year", colours = colpal,  breaks = seq(zlim[1], zlim[2], by = 10), limits = zlim) +
+  theme(
+      legend.key.height = unit(0.5, "inch"),
+      # axis.text.x = element_text(angle = 90, hjust = 1),
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_gradientn(name = "year", colours = colpal,  breaks = seq(zlim[1], zlim[2], by = 20), limits = zlim) +
+  coord_fixed() +
   scale_shape_manual(values=c(24, 25))+
-  ggtitle(paste0(varname_inplot, ", multimodel time of emergence, factual = historical + rcp85, counterfactual = historicalNat"))
+  ggtitle(paste0(varname_inplot, ", multimodel time of emergence"))
 plot(p)
 dev.off()
 
@@ -369,7 +428,7 @@ p <- ggplot(
     name = "CMIP"
   ) +
   facet_wrap(~ gridpoint, ncol = 2) +
-  ggtitle(paste0("Aggregation: KL weights distances for gridpoints around ", city))
+  ggtitle(paste0("Aggregation: KL weights for gridpoints around ", city))
 plot(p)
 dev.off()
 
@@ -393,6 +452,15 @@ weights_allgridpoints <- within(
 )
 ylim <- c(0, with(weights_allgridpoints, max(weight[is.finite(weight)])))
 
+write.table(
+  aggregate(weight ~ model, weights_allgridpoints,  function(w) mean(w == 0)),
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights_summary_mean.txt"))
+)
+write.table(
+  aggregate(weight ~ model, weights_allgridpoints,  function(w) mean(w)),
+  file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights_summary_zerofreq.txt"))
+)
+
 pdf(
   file.path(cmip5_prefix, paste0(cmip5_prefix, "_weights_allgripoints.pdf")),
   width = 20 / 2.54, height = 25 / 2.54
@@ -406,7 +474,7 @@ p <- ggplot(weights_allgridpoints) +
   ) +
   scale_fill_gradientn(colours = rev(magma(5)), limits = ylim) +
   # xlim(1850, 2100) + ggtitle("p12(t), counterfactual = historical[1850-1900]")
-  ggtitle(paste0("Expert aggregation: weights distances for each location and each model"))
+  ggtitle(paste0("Expert aggregation: weights for each location and each model"))
 plot(p)
 dev.off()
 

@@ -53,6 +53,7 @@ estim_p12_ns <- function(x, t, z, tpred = sort(unique(t)), kernel, h = length(t)
     tpred = tpred,
     p12_hat = p12,
     sigma_p12_hat = sqrt(p12_var),
+    tz = t,
     GmZ = GmZ
   )
 }
