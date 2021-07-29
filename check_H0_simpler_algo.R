@@ -20,15 +20,23 @@ qqplot_checkH0 <- function(lXmZm, lmodels, linstitutes) {
   ggplot(data = qq_df) +
     geom_abline(intercept = 0, slope = 1) +
     geom_point(aes(x = Xm, y = Zm)) +
-    geom_point(
-      data = adtest,
-      aes(x = xylim[1] + 0.1 * diff(xylim),
-          y = xylim[1] + 0.9 * diff(xylim),
-          fill = pvalue, size = 2 * pvalue
-      ),
-      shape = 23
-    ) +
-  guides(size = "none") +
+    #geom_point(
+    #  data = adtest,
+    #  aes(x = xylim[1] + 0.1 * diff(xylim),
+    #      y = xylim[1] + 0.9 * diff(xylim),
+    #      fill = pvalue, size = 2 * pvalue
+    #  ),
+    #  shape = 23
+    #) +
+    geom_label(
+        data = adtest,
+        aes(x = xylim[1] + 0.1 * diff(xylim),
+            y = xylim[1] + 0.9 * diff(xylim),
+            label = sprintf("%1.2f", pvalue)
+        ),
+        size = 3
+    ) + 
+    guides(size = "none") +
     facet_wrap(~ institute + model, ncol = ceiling(sqrt(length(lmodels)))) +
     scale_fill_gradientn(colours = rev(magma(5)), limits = c(0, 1)) +
     ggtitle("Checking A: qq-plot(Xm, Zm)") +

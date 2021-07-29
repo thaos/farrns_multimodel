@@ -9,7 +9,7 @@ compute_allchain <- function(lmodels, linstitutes, tas_cmip5, kernel, bandwidth,
 
   lXmZm <- lapply(lmodels, function(model, tas_cmip5) {
     tas_model <- tas_cmip5[tas_cmip5$model == model, ]
-    tas_model_factual <- tas_model[tas_model$experiment == "historical" & tas_model$year => year_pi[1] & tas_model$year <= year_pi[2], ]
+    tas_model_factual <- tas_model[tas_model$experiment == "historical" & tas_model$year >= year_pi[1] & tas_model$year <= year_pi[2], ]
     tas_model_counterfactual <- tas_model[tas_model$experiment == "historicalNat" & tas_model$year >= year_pi[1] & tas_model$year <= year_pi[2], ]
     return(
       list(

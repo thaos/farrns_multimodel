@@ -13,6 +13,7 @@ config <- new.env()
 source("config_pryearmax.R",  local = config) 
 cmip5_rds <- config$cmip5_rds
 cmip6_rds <- config$cmip6_rds
+cmip_df_rds <- config$cmip_df_rds
 cmip5_prefix <- config$cmip5_prefix
 p12outputs_rds <- config$p12outputs_rds 
 unit_scaling <- config$unit_scaling
@@ -91,7 +92,10 @@ saveRDS(
 # ---------------------------------
 # Rescale the variables
 tas_cmip5[, -(1:5)] <- unit_scaling(tas_cmip5[, -(1:5)])
-
+saveRDS(
+    tas_cmip5,
+    file = paste0(cmip5_prefix, "_cmip_df.rds")
+)
 # ---------------------------------
 # Hadcrut lat lon
 hadcrut_nc <- "tas_hadcrut_augustavg.nc"
